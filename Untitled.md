@@ -25,3 +25,13 @@ dadad
 
 ### 4
 dada
+
+```{r}
+library(reticulate)
+use_python('/usr/local/bin/python3.10')
+```
+
+```{python}
+print("sys.path")
+
+```
