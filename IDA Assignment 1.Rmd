@@ -1,0 +1,325 @@
+---
+title: |
+  <center>Incomplete Data Analysis Assignment 1</center>
+author: "Tian Feng"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+papersize: a4
+mainfont: Times New Roman
+---
+
+
+## Q1 (a)
+
+My choice is (ii) 0.3. Since ALQ is MCAR, the probability of ALQ being missing is
+completely unrelated to the data, including themselves. Therefore, the probabilities for
+the two groups, ALQ=Yes and ALQ=No, are the same.  
+
+## Q1 (b)  
+
+My choice is (ii). The statement that ALQ being MAR given gender implies that the probability
+of ALQ being missing only depends on gender, and within a group of the same gender, ALQ is MCAR so that the probability does not change over ALQ values. Thus, (ii) is correct and (i) and (iii) are wrong.
+
+## Q1 (c)
+
+My choice is (iii). Given the probability conditioning on gender = male, we cannot derive the 
+probability given gender = female, which requires the probability of participants being female. However, we know nothing about the distribution of genders among these participants. 
+
+# Q2
+
+Since the dataset has 10 variables and each variable contains 10% of missing values, there are totally 100 missing values. The largest subsample consists of 90 subjects, which happens when all data of 10 subjects are missing. Thus, the data of the remaining 90 subjects are complete, which can be employed with complete data analysis. On the other hand, when each subject has exactly one missing data, no subject has complete data so that the smallest subsample would be 0.
+
+
+## Q3 (a)
+
+```{r, include = TRUE, message = FALSE}
+library("MASS")
+set.seed(1)
+# data size
+n <- 500
+# mean
+mu1 <- mu2 <- mu3 <-0
+# covariance matrix
+Sigma <- diag(3)
+
+# generate Z=(Z1,Z2,Z3)
+Z <- mvrnorm(n, mu = c(mu1, mu2, mu3), Sigma = Sigma)
+
+# storing and rounding the simulated values in three variables
+Z1 <- round(Z[,1], digits = 5); Z2 <- round(Z[,2], digits = 5); Z3 <- round(Z[,3], digits = 5)
+
+# generate Y1 and Y2
+Y1 <- Z1 + 1
+Y2 <- 5 + 2 * Z1 + Z2
+Y <- data.frame(Y1,Y2)
+```
+
+When $a=2$ and $b=0$, $Y_2$ is missing if $2\times(Y_1-1)+Z_3<0$. Thus, $Y_2$ being missing does depend on $Y_1$, which implies that this mechanism is **MAR**. We can check this by comparing the marginal distributions of $Y_2$.
+
+```{r, include = TRUE, message = FALSE}
+a <- 2
+b <- 0
+# indices of observed values
+ind_obs1 <- which(a*(Y1-1)+b*(Y2-5)+Z3>=0)
+
+Y2_MAR_obs <- Y2[ind_obs1]
+
+# impose missingness
+Y_MAR <- Y
+Y_MAR[-ind_obs1, 2] <- NA
+
+plot(density(Y2), lwd = 2, col = 2, xlab = "Y2", 
+     main = "Q3(a). Y2 Complete v.s. Observed", 
+     ylim = c(-0.005,0.25))
+lines(density(Y2_MAR_obs), lwd = 2, col = 4)
+legend("topleft", legend = c("Y2 complete", "Y2 observed"), 
+       col= c(2,4), lty = c(1,1), lwd = c(2,2), bty = 'n')
+```
+
+From the diagram above, we can see that the complete and observed distributions are quite different, confirming that this is a **MAR** mechanism.    
+
+## Q3 (b)
+
+To perform stochastic regression imputation, we fit a regression model on the observed set, using $Y_2$ as the response variable and $Y_1$ as the covariate.
+
+$$
+{Y_2}_i=\beta_0+\beta_1{Y_1}_i+\epsilon_i,\quad\quad\epsilon_i\sim\cal{N}(\bf {0},\sigma^2)
+$$
+
+```{r, include = TRUE, message = FALSE}
+# regression fit
+fit_MAR <- lm(Y2~Y1, Y_MAR)
+set.seed(1)
+# predict with noise
+predicted_MAR <- predict(fit_MAR, Y_MAR) + rnorm(n, 0, sigma(fit_MAR))
+# complete Y_MAR
+Y2_MAR_sri <- ifelse(is.na(Y_MAR$Y2), predicted_MAR, Y_MAR$Y2)
+
+#plot distributions
+plot(density(Y2), lwd = 2, col = 2, xlab = "Y2", 
+     main = "Q3(b). Stochastic regression imputation", 
+     ylim = c(-0.005,0.25), lty = 1)
+lines(density(Y2_MAR_sri), lwd = 2, col = 4, lty =1)
+legend("topleft", legend = c("original", "imputation"), 
+       col= c(2,4), lty = c(1,1), lwd = c(2,2), bty = 'n')
+```
+
+In this diagram, we can see that the stochastic regression imputation performs quite well on both sides of the line, but the imputation around the peak is slightly bad. It is probably due to the number of missingness is large (256), more than half of the total size. However, if I change the value in **set.seed( )** on my computer, most times it will generate rather brilliant imputation where two densities overlap heavily. On the other hand, the stochastic regression imputation indeed leads to less difference between two densities.
+
+## Q3 (c)
+
+When $a=0$ and $b=2$, $Y_2$ is missing if $2\times(Y_2-5)+Z_3<0$. Thus, $Y_2$ being missing does depend on $Y_2$ itself, which implies that this mechanism is **MNAR**. We can check this by comparing the marginal distributions of $Y_2$.
+
+```{r, include = TRUE, message = FALSE}
+a <- 0
+b <- 2
+# indices of observed values
+ind_obs2 <- which(a*(Y1-1)+b*(Y2-5)+Z3>=0)
+
+Y2_MNAR_obs <- Y2[ind_obs2]
+# impose missingness
+Y_MNAR <- Y
+Y_MNAR[-ind_obs2,2] <- NA
+
+plot(density(Y2), lwd = 2, col = 2, xlab = "Y2", 
+     main = "Q3(c). Y2 Complete v.s. Observed", 
+     ylim = c(-0.005,0.3))
+lines(density(Y2_MNAR_obs), lwd = 2, col = 4)
+legend("topleft", legend = c("Y2 complete", "Y2 observed"), 
+       col= c(2,4), lty = c(1,1), lwd = c(2,2), bty = 'n')
+```
+
+From the diagram above, we can see that the distinction between complete and observed distributions is more obvious than that in Q3(a) (**MAR**), confirming this is a **MNAR** mechanism. 
+
+
+## Q3 (d)
+
+As before, to perform stochastic regression imputation, we fit a regression model on the observed set, using $Y_2$ as the response variable and $Y_1$ as the covariate.
+
+```{r, include = TRUE, message = FALSE}
+# regression fit
+fit_MNAR <- lm(Y2~Y1, Y_MNAR)
+set.seed(1)
+# predict with noise
+predicted_MNAR <- predict(fit_MNAR, Y_MNAR) + rnorm(n, 0, sigma(fit_MNAR))
+# complete Y_MNAR
+Y2_MNAR_sri <- ifelse(is.na(Y_MNAR$Y2), predicted_MNAR, Y_MNAR$Y2)
+
+#plot distributions
+plot(density(Y2), lwd = 2, col = 2, xlab = "Y2", 
+     main = "Q3(d). Stochastic regression imputation", 
+     ylim = c(-0.005,0.27), lty = 1)
+lines(density(Y2_MNAR_sri), lwd = 2, col = 4, lty =1)
+legend("topleft", legend = c("original", "imputation"), 
+       col= c(2,4), lty = c(1,1), lwd = c(2,2), bty = 'n')
+```
+
+Similar to the result in Q3(c), the difference between two distributions is more dramatic than that in Q3(b) (**MAR**). It mainly results from this mechanism is **MNAR**. Also, the number of missing number is larger (261), which is more challenging for imputation. But, honestly, the complete data after imputation is much better than the observed data just after imposing missingness.
+
+
+
+## Q4 (a)
+
+Using the complete data analysis, the mean of recovery time is 19.27273 with the corresponding standard error 2.603013. The correlation between the recovery time and the dose is 0.2391256, and the correlation between the recovery time and the blood pressure is -0.01952862.   
+
+```{r, include = TRUE, message = FALSE}
+load("databp.rdata")
+# indices of subjects with recovery time observed
+ind_obs <- which(is.na(databp$recovtime) == FALSE)
+
+rt <- databp$recovtime
+# mean of recovery time of complete cases
+m_comp <- mean(rt, na.rm= TRUE)
+# standard error
+se_comp <- sd(rt, na.rm = TRUE)/sqrt(length(ind_obs))
+m_comp; se_comp
+
+# covariance matrix
+cov_comp <- cov(databp, use = "complete")
+# correlation between recovery time and dose
+cor_rt_dose_comp <- cov_comp[1,3]/sqrt(cov_comp[1,1]*cov_comp[3,3])
+cor_rt_dose_comp
+# correlation between recovery time and blood pressure
+cor_rt_bp_comp <- cov_comp[2,3]/sqrt(cov_comp[2,2]*cov_comp[3,3])
+cor_rt_bp_comp
+```
+
+## Q4 (b)
+
+Using the mean imputation, the mean of recovery time is 19.27273 with the corresponding standard error 2.284135. The correlation between the recovery time and the dose is 0.2150612, and the correlation between the recovery time and the blood pressure is -0.01934126. 
+
+```{r, include = TRUE, message = FALSE}
+rt_mi <- ifelse(is.na(rt) == TRUE, m_comp, rt)
+
+m_mi <- mean(rt_mi)
+se_mi <- sd(rt_mi)/sqrt(length(rt_mi))
+m_mi; se_mi
+
+# complete data after mean imputation
+data_mi <- databp
+data_mi$recovtime <- rt_mi
+
+# covariance matrix
+cov_mi <- cov(data_mi)
+# correlation between recovery time and dose
+cor_rt_dose_mi <- cov_mi[1,3]/sqrt(cov_mi[1,1]*cov_mi[3,3])
+cor_rt_dose_mi
+# correlation between recovery time and blood pressure
+cor_rt_bp_mi <- cov_mi[2,3]/sqrt(cov_mi[2,2]*cov_mi[3,3])
+cor_rt_bp_mi
+```
+
+## Q4 (c)
+
+We will now use the regression imputation, conditioning on dose and blood pressure, to impute recovery time values. The regression model is as follows
+$$
+\mathrm{Recovery\ Time}=\beta_0+\beta_1\mathrm{Dose}+\beta_2\mathrm{Blood\ Pressure}+\epsilon, \quad\epsilon\sim\cal{N}(0,\sigma^2)
+$$
+
+```{r, include = TRUE, message = FALSE}
+fit_ri <- lm(recovtime~logdose+bloodp, databp)
+pred_ri <- predict(fit_ri, databp)
+
+rt_ri <- ifelse(is.na(rt) == TRUE, pred_ri, rt)
+m_ri <- mean(rt_ri)
+se_ri <- sd(rt_ri)/sqrt(length(rt_ri))
+m_ri; se_ri
+```
+
+We should examine whether the linearity assumption is roughly met, using the plot of the fitted values against the residuals.
+
+```{r, include = TRUE, message = FALSE}
+plot(fit_ri$fitted.values, residuals(fit_ri), xlab = "Fitted values", ylab = "Residuals")
+```
+
+There is no obvious pattern, so there is no reason to suspect of a nonlinear relationship or of no constant variance. Then, we need to compute the desired correlations between variables.
+
+```{r, include = TRUE, message = FALSE}
+# complete data after regression imputation
+data_ri <- databp
+data_ri$recovtime <- rt_ri
+
+# covariance matrix
+cov_ri <- cov(data_ri)
+# correlation between recovery time and dose
+cor_rt_dose_ri <- cov_ri[1,3]/sqrt(cov_ri[1,1]*cov_ri[3,3])
+cor_rt_dose_ri
+# correlation between recovery time and blood pressure
+cor_rt_bp_ri <- cov_ri[2,3]/sqrt(cov_ri[2,2]*cov_ri[3,3])
+cor_rt_bp_ri
+```
+
+In conclusion, using the regression imputation, the mean of recovery time is 19.44428 with the corresponding standard error 2.312845. The correlation between the recovery time and the dose is 0.2801835, and the correlation between the recovery time and the blood pressure is -0.0111364.  
+
+## Q4 (d)
+Using the stochastic regression imputation, the mean of recovery time is 20.4598 with the corresponding standard error 2.444571. The correlation between the recovery time and the dose is 0.2284537, and the correlation between the recovery time and the blood pressure is -0.01786944. Since we have added random noise to the prediction, there could be negative values for predictions of recovery time, which is implausible.
+
+```{r, include = TRUE, message = FALSE}
+set.seed(1)
+pred_sri <- predict(fit_ri, databp) + rnorm(nrow(databp), 0, sigma(fit_ri))
+
+rt_sri <- ifelse(is.na(rt) == TRUE, pred_sri, rt)
+
+m_sri <- mean(rt_sri)
+se_sri <- sd(rt_sri)/sqrt(length(rt_sri))
+m_sri; se_sri
+
+# complete data after stochastic regression imputation
+data_sri <- databp
+data_sri$recovtime <- rt_sri
+
+# covariance matrix
+cov_sri <- cov(data_sri)
+# correlation between recovery time and dose
+cor_rt_dose_sri <- cov_sri[1,3]/sqrt(cov_sri[1,1]*cov_sri[3,3])
+cor_rt_dose_sri
+# correlation between recovery time and blood pressure
+cor_rt_bp_sri <- cov_sri[2,3]/sqrt(cov_sri[2,2]*cov_sri[3,3])
+cor_rt_bp_sri
+```
+
+## Q4 (e)
+
+Using the predictive mean matching, the mean of recovery time is 19.44 with the corresponding standard error 2.464467. The correlation between the recovery time and the dose is 0.3037945, and the correlation between the recovery time and the blood pressure is -0.03208685. Since we have added random noise to the prediction, there could be negative values for predictions of recovery time, which is implausible.
+
+```{r, include = TRUE, message = FALSE}
+rt_obs <- databp$recovtime[ind_obs]
+
+pred_obs <- pred_ri[ind_obs]
+pred_mis <- pred_ri[-ind_obs]
+
+replace <- c()
+for (i in 1:length(pred_mis)){
+  diff <- (pred_obs-pred_mis[i])^2
+  ind <- which(diff == min(diff))
+  replace[i] <- rt_obs[ind[[1]]]
+}
+
+# complete data after predictive mean matching
+data_pmm <- databp
+data_pmm$recovtime[-ind_obs] <- replace
+
+m_pmm <- mean(data_pmm$recovtime)
+se_pmm <- sd(data_pmm$recovtim)/sqrt(nrow(data_pmm))
+m_pmm; se_pmm
+
+# covariance matrix
+cov_pmm <- cov(data_pmm)
+# correlation between recovery time and dose
+cor_rt_dose_pmm <- cov_pmm[1,3]/sqrt(cov_pmm[1,1]*cov_pmm[3,3])
+cor_rt_dose_pmm
+# correlation between recovery time and blood pressure
+cor_rt_bp_pmm <- cov_pmm[2,3]/sqrt(cov_pmm[2,2]*cov_pmm[3,3])
+cor_rt_bp_pmm
+```
+
+## Q4 (f)
+
+As we discussed in Q4(d), the stochastic regression imputation could lead to implausible predictions. In this case, the recovery time would be negative. In contrast, with the predictive mean matching, we just fill in the missing values with the suitable observed values. These data will not violate the plausible assumptions.
+
+When the number of subjects with observed value is quite small, the pool of donors will be small as well. This will potentially distort the results. That is, sometimes the same donor will be picked up several times, which attenuates the variability of the imputed data.
+
+
+
